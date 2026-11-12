@@ -1,5 +1,7 @@
 # Jade Dragon — 老虎機機率模型與可重現模擬驗證工具
 
+[![tests](https://github.com/Benny021018/slot-math/actions/workflows/tests.yml/badge.svg)](https://github.com/Benny021018/slot-math/actions/workflows/tests.yml)
+
 A synthetic 5×3 slot (fictional, built from scratch for this portfolio, no proprietary data) with an exact RTP model,
 two independent simulators (Python + C++), confidence-interval-based acceptance and a regression pipeline.
 
