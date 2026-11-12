@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jade Dragon 試玩：看 RTP 怎麼收斂</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #E4ECE5;      /* 青瓷底 */
+    --paper-2: #EEF3EE;
+    --jade: #17564A;       /* 玉 */
+    --jade-deep: #0E3A31;
+    --ink: #1C2B27;
+    --muted: #5B6E67;
+    --line: #C3D2C7;
+    --cinnabar: #B23A2C;   /* 朱砂：中獎、印章 */
+    --gold: #9C7A2E;
+    --serif: "Noto Serif TC", "Songti TC", serif;
+    --sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.6 var(--sans); font-variant-numeric: tabular-nums;
+  }
+  a { color: var(--jade); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 20px 56px; }
+  header { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 22px; }
+  h1 { font: 900 34px/1.15 var(--serif); margin: 0; color: var(--jade-deep); letter-spacing: .02em; }
+  h1 small { font: 600 18px var(--serif); color: var(--muted); margin-left: 8px; letter-spacing: 0; }
+  header p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  /* 盤面 */
+  .machine { background: var(--jade-deep); border-radius: 14px; padding: 16px; }
+  .board { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .reel { display: grid; grid-template-rows: repeat(3, 1fr); gap: 8px; }
+  .tile {
+    aspect-ratio: 1 / 1; border-radius: 8px; background: var(--paper-2);
+    display: grid; place-items: center; position: relative;
+    font: 900 clamp(26px, 5.2vw, 46px)/1 var(--serif); color: var(--jade);
+    transition: box-shadow .15s, opacity .15s;
+  }
+  .tile .code { position: absolute; right: 6px; bottom: 4px; font: 500 10px var(--sans); color: var(--muted); }
+  .tile.H { color: var(--jade-deep); }
+  .tile.L { color: #6F827A; font-weight: 600; }
+  .tile.W { background: var(--jade); color: #E9F1EA; }
+  .tile.W .code { color: #A9C4B5; }
+  .tile.S { background: var(--cinnabar); color: #FBEDE8; }
+  .tile.S .code { color: #F0C2B8; }
+  .tile.dim { opacity: .38; }
+  .tile.hit { box-shadow: 0 0 0 3px var(--cinnabar) inset; }
+  .tile.W.hit, .tile.S.hit { box-shadow: 0 0 0 3px #F3D27A inset; }
+  .tile.blur { color: transparent; text-shadow: 0 0 9px rgba(23, 86, 74, .55); }
+  svg.lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  svg.lines polyline { fill: none; stroke: var(--cinnabar); stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; opacity: .75; }
+  svg.lines polyline.focus { stroke-width: 6; opacity: 1; }
+
+  .status { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; color: #CFE0D5; margin-top: 14px; min-height: 30px; }
+  .status .big { font: 900 26px var(--serif); color: #fff; }
+  .status .fs { color: #F3D27A; font-weight: 700; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+  .bet { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--paper-2); }
+  .bet button { border: 0; background: transparent; padding: 8px 14px; font: 500 14px var(--sans); color: var(--muted); cursor: pointer; }
+  .bet button[aria-pressed="true"] { background: var(--jade); color: #fff; }
+  .bet span { padding: 8px 4px 8px 14px; color: var(--muted); font-size: 13px; }
+  button.act {
+    border: 1px solid var(--jade); background: var(--paper-2); color: var(--jade);
+    padding: 9px 16px; border-radius: 999px; font: 500 14px var(--sans); cursor: pointer;
+  }
+  button.spin {
+    background: var(--cinnabar); border-color: var(--cinnabar); color: #fff;
+    font: 900 18px var(--serif); padding: 10px 30px;
+  }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible { outline: 3px solid #E0B44C; outline-offset: 2px; }
+  .hint { color: var(--muted); font-size: 13px; }
+
+  .wins { margin: 16px 0 0; padding: 0; list-style: none; max-height: 168px; overflow: auto; }
+  .wins li { display: flex; justify-content: space-between; padding: 5px 2px; border-bottom: 1px solid var(--line); cursor: default; }
+  .wins li:hover { color: var(--cinnabar); }
+  .wins .sym { font-family: var(--serif); font-weight: 900; }
+
+  /* 帳本 */
+  .ledger h2, .more h2 { font: 900 20px var(--serif); margin: 0 0 10px; color: var(--jade-deep); }
+  .rtp { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .rtp .you { font: 900 54px/1 var(--serif); color: var(--jade-deep); }
+  .rtp .vs { color: var(--muted); }
+  .verdict { margin: 6px 0 14px; font-weight: 500; }
+  .verdict.in { color: var(--jade); }
+  .verdict.out { color: var(--cinnabar); }
+  table.stats { width: 100%; border-collapse: collapse; }
+  table.stats th, table.stats td { text-align: right; padding: 6px 0; border-bottom: 1px solid var(--line); font-weight: 400; }
+  table.stats th:first-child { text-align: left; color: var(--muted); }
+  table.stats thead th { color: var(--muted); font-size: 13px; }
+  canvas { width: 100%; height: 240px; display: block; margin-top: 18px; background: var(--paper-2); border-radius: 10px; }
+  .caption { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+  .more { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  @media (max-width: 880px) { .more { grid-template-columns: 1fr; } }
+  details { border-top: 1px solid var(--line); padding: 12px 0; }
+  summary { cursor: pointer; font: 900 18px var(--serif); color: var(--jade-deep); }
+  table.pay { border-collapse: collapse; width: 100%; margin-top: 10px; }
+  table.pay td, table.pay th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; font-weight: 400; }
+  table.pay td:first-child, table.pay th:first-child { text-align: left; }
+  table.pay .g { font: 900 20px var(--serif); color: var(--jade-deep); margin-right: 6px; }
+  .more p, .more li { max-width: 62ch; }
+  footer { margin-top: 36px; color: var(--muted); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Jade Dragon<small>翡翠龍 試玩</small></h1>
+    <p>規則、賠率和輪帶和驗證報告用的是同一份設定。轉幾把看看，再按「快轉」，看你的 RTP 怎麼一步步靠近理論的 96.65%。</p>
+  </header>
+
+  <div class="grid">
+    <section>
+      <div class="machine">
+        <div class="board" id="board" aria-label="盤面"></div>
+        <div class="status" aria-live="polite">
+          <span id="msg">按「轉動」或空白鍵開始</span>
+          <span><span id="fs" class="fs"></span> <span class="big" id="lastwin"></span></span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="bet" role="group" aria-label="線注">
+          <span>線注</span>
+          <button data-bet="1" aria-pressed="true">1</button>
+          <button data-bet="2" aria-pressed="false">2</button>
+          <button data-bet="5" aria-pressed="false">5</button>
+          <button data-bet="10" aria-pressed="false">10</button>
+        </div>
+        <button class="act spin" id="spin">轉動</button>
+        <button class="act" id="auto">自動 10 把</button>
+      </div>
+      <div class="controls">
+        <button class="act" id="fast1">快轉 1 萬局</button>
+        <button class="act" id="fast2">快轉 100 萬局</button>
+        <button class="act" id="reset">重新開始</button>
+        <span class="hint" id="bethint"></span>
+      </div>
+      <ul class="wins" id="wins" aria-label="這一把的中獎"></ul>
+    </section>
+
+    <section class="ledger">
+      <h2>你的帳本</h2>
+      <div class="rtp">
+        <span class="you" id="rtp">—</span>
+        <span class="vs">理論 RTP <b id="theory"></b></span>
+      </div>
+      <div class="verdict" id="verdict">還沒開始</div>
+      <table class="stats">
+        <thead><tr><th></th><th>你</th><th>理論</th></tr></thead>
+        <tbody>
+          <tr><th>已玩局數（付費轉動）</th><td id="n">0</td><td></td></tr>
+          <tr><th>押注合計／獎金合計</th><td id="money">0／0</td><td></td></tr>
+          <tr><th>命中率（有獎或觸發）</th><td id="hit">—</td><td id="hitT"></td></tr>
+          <tr><th>免費遊戲觸發</th><td id="trig">—</td><td id="trigT"></td></tr>
+          <tr><th>每次觸發平均局數</th><td id="fsn">—</td><td id="fsnT"></td></tr>
+          <tr><th>單局最大獎</th><td id="max">—</td><td id="maxT">主遊戲單轉最高 101 倍</td></tr>
+        </tbody>
+      </table>
+      <canvas id="chart" aria-label="RTP 收斂圖：橫軸局數（對數），縱軸 RTP"></canvas>
+      <p class="caption" id="caption"></p>
+    </section>
+  </div>
+
+  <div class="more">
+    <div>
+      <details open>
+        <summary>規則</summary>
+        <ul>
+          <li>5 軸 × 3 列、20 條固定線，總押注＝線注 × 20。</li>
+          <li>線獎從最左邊第 1 軸開始，連續 3 個以上同符號，賠「線注」的倍數。</li>
+          <li><b>龍</b>（Wild）可以替代「珠」以外的所有符號，本身也有賠率；兩種算法取較大的。</li>
+          <li><b>珠</b>（Scatter）出現在畫面任何位置都算：3／4／5 個賠總押注的 2／10／100 倍。</li>
+          <li>3 個以上的珠送 10 次免費遊戲：不扣押注、獎金 ×2，期間再出 3 個珠再加 10 次。</li>
+          <li>免費遊戲的獎金算進觸發它的那一局，RTP 的分母只算付費的押注。</li>
+        </ul>
+      </details>
+      <details>
+        <summary>賠率表</summary>
+        <table class="pay" id="paytable"></table>
+      </details>
+    </div>
+    <div>
+      <details open>
+        <summary>這頁在驗證什麼</summary>
+        <p>理論 RTP 96.6506% 是窮舉全部 13,798,512 種停輪組合算出來的精確值。右邊的喇叭口是理論值的 95% 範圍：寬度是 1.96σ/√n，σ＝每局獎金的標準差 3.71 倍押注。</p>
+        <p>玩 100 局時，RTP 落在 24% 到 169% 都算正常；玩到 100 萬局，範圍只剩 ±0.73%。所以判斷模擬對不對，要看它有沒有落在依局數算出來的範圍裡，不能只看「差幾個百分點」。</p>
+        <p>這頁的計分程式（<code>play/engine.js</code>）和 Python 模型是分開寫的，測試會用 5 萬多組盤面逐一比對兩邊的結果。</p>
+      </details>
+      <details>
+        <summary>原始碼與報告</summary>
+        <p><a href="https://github.com/Benny021018/slot-math">github.com/Benny021018/slot-math</a>：規格、理論計算、Python 與 C++ 模擬器、驗收報告、AI 工作流案例。</p>
+      </details>
+    </div>
+  </div>
+  <footer>自行設計的合成題目，僅供展示機率模型，不涉及任何真實金錢。亂數使用瀏覽器的 crypto.getRandomValues，並以拒絕抽樣避免取餘數偏差。</footer>
+</div>
+
+<script>
+/*__GAME__*/
+</script>
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+(function () {
+  "use strict";
+  const E = JadeEngine.makeEngine(GAME);
+  const T = THEORY;
+  const GLYPH = { W: "龍", S: "珠", H1: "玉", H2: "金", H3: "鯉", L1: "甲", L2: "乙", L3: "丙", L4: "丁" };
+  const NAME = { W: "龍（Wild）", S: "珠（Scatter）", H1: "玉", H2: "金", H3: "鯉", L1: "甲", L2: "乙", L3: "丙", L4: "丁" };
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, d = 0) => x.toLocaleString("zh-TW", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const pct = (x, d = 2) => (100 * x).toFixed(d) + "%";
+
+  // 有緩衝的無偏亂數 [0, n)
+  const buf = new Uint32Array(8192);
+  let bi = buf.length;
+  function rand(n) {
+    const limit = Math.floor(0x100000000 / n) * n;
+    for (;;) {
+      if (bi >= buf.length) { crypto.getRandomValues(buf); bi = 0; }
+      const x = buf[bi++];
+      if (x < limit) return x % n;
+    }
+  }
+
+  // ---------- 盤面 ----------
+  const board = $("board");
+  const tiles = [];
+  for (let r = 0; r < 5; r++) {
+    const col = document.createElement("div");
+    col.className = "reel";
+    tiles.push([]);
+    for (let row = 0; row < 3; row++) {
+      const t = document.createElement("div");
+      t.className = "tile";
+      col.appendChild(t);
+      tiles[r].push(t);
+    }
+    board.appendChild(col);
+  }
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "lines");
+  board.appendChild(svg);
+
+  function setTile(t, sym) {
+    t.className = "tile " + (sym === "W" ? "W" : sym === "S" ? "S" : sym[0]);
+    t.innerHTML = GLYPH[sym] + '<span class="code">' + sym + "</span>";
+    t.setAttribute("aria-label", NAME[sym]);
+  }
+  function showWindow(win) { for (let r = 0; r < 5; r++) for (let row = 0; row < 3; row++) setTile(tiles[r][row], win[r][row]); }
+
+  function center(r, row) {
+    const b = board.getBoundingClientRect();
+    const t = tiles[r][row].getBoundingClientRect();
+    return [t.left - b.left + t.width / 2, t.top - b.top + t.height / 2];
+  }
+  function drawLines(res, focus) {
+    const b = board.getBoundingClientRect();
+    svg.setAttribute("viewBox", "0 0 " + b.width + " " + b.height);
+    svg.innerHTML = "";
+    for (const row of tiles) for (const t of row) t.classList.remove("hit", "dim");
+    if (!res || (!res.wins.length && res.scatters < 3)) return;
+    const lit = new Set();
+    for (const w of res.wins) {
+      if (focus != null && w.line !== focus) continue;
+      const rows = GAME.lines[w.line];
+      const pts = rows.map((row, r) => center(r, row).join(",")).join(" ");
+      const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      pl.setAttribute("points", pts);
+      if (focus != null) pl.setAttribute("class", "focus");
+      svg.appendChild(pl);
+      for (let r = 0; r < w.count; r++) lit.add(r + ":" + rows[r]);
+    }
+    if (focus == null && res.scatters >= 3) {
+      res.window.forEach((col, r) => col.forEach((s, row) => { if (s === "S") lit.add(r + ":" + row); }));
+    }
+    for (let r = 0; r < 5; r++) for (let row = 0; row < 3; row++) {
+      const t = tiles[r][row];
+      if (lit.has(r + ":" + row)) t.classList.add("hit"); else t.classList.add("dim");
+    }
+  }
+
+  // ---------- 狀態 ----------
+  let lineBet = 1;
+  let st;
+  let current = null;      // 正在進行的一局（含免費遊戲）
+  let busy = false;
+  let lastRes = null;
+
+  function resetStats() {
+    st = { n: 0, win: 0, hits: 0, trig: 0, fsSpins: 0, max: 0, pts: [], nextPt: 1, money: 0, paid: 0 };
+    current = null;
+    lastRes = null;
+    $("fs").textContent = "";
+    $("lastwin").textContent = "";
+    $("msg").textContent = "按「轉動」或空白鍵開始";
+    $("wins").innerHTML = "";
+    showWindow(E.windowAt(E.randomStops(rand)));
+    drawLines(null);
+    render();
+  }
+
+  function finishRound(r) {
+    st.n++;
+    st.win += r.win;
+    if (r.hit) st.hits++;
+    if (r.triggered) { st.trig++; st.fsSpins += r.freeSpins; }
+    if (r.win > st.max) st.max = r.win;
+    if (st.n >= st.nextPt) {
+      st.pts.push([st.n, st.win / st.n]);
+      st.nextPt = Math.max(st.n + 1, Math.ceil(st.n * 1.015));
+    }
+  }
+
+  // ---------- 一般轉動（有動畫） ----------
+  function animate(final, done) {
+    if (reduce) { showWindow(final); done(); return; }
+    const syms = GAME.symbols;
+    const stopAt = [0, 1, 2, 3, 4].map((r) => 260 + r * 110);
+    const t0 = performance.now();
+    function frame(now) {
+      const el = now - t0;
+      let all = true;
+      for (let r = 0; r < 5; r++) {
+        if (el < stopAt[r]) {
+          all = false;
+          for (let row = 0; row < 3; row++) {
+            setTile(tiles[r][row], syms[rand(syms.length)]);
+            tiles[r][row].classList.add("blur");
+          }
+        } else if (!tiles[r][0].dataset.done) {
+          for (let row = 0; row < 3; row++) setTile(tiles[r][row], final[r][row]);
+          tiles[r][0].dataset.done = "1";
+        }
+      }
+      if (all) {
+        for (let r = 0; r < 5; r++) delete tiles[r][0].dataset.done;
+        done();
+      } else requestAnimationFrame(frame);
+    }
+    for (let r = 0; r < 5; r++) delete tiles[r][0].dataset.done;
+    drawLines(null);
+    requestAnimationFrame(frame);
+  }
+
+  function spinOnce(cb) {
+    if (busy) return;
+    busy = true;
+    setButtons();
+    const inFree = !!(current && current.left > 0);
+    if (!inFree) {
+      current = { win: 0, left: 0, hit: false, triggered: false, freeSpins: 0 };
+      st.paid += 20 * lineBet;
+    } else {
+      current.left--;
+      current.freeSpins++;
+    }
+    const res = E.spin(E.randomStops(rand), inFree);
+    animate(res.window, () => {
+      lastRes = res;
+      current.win += res.win;
+      st.money += res.win * 20 * lineBet;
+      if (!inFree) { current.hit = res.win > 0 || res.award > 0; current.triggered = res.award > 0; }
+      current.left += res.award;
+      drawLines(res);
+      showResult(res, inFree);
+      if (current.left === 0) { finishRound(current); current = null; }
+      busy = false;
+      render();
+      setButtons();
+      if (cb) cb();
+    });
+  }
+
+  function showResult(res, inFree) {
+    const credits = res.win * 20 * lineBet;
+    $("lastwin").textContent = credits > 0 ? "+" + fmt(credits, credits % 1 ? 1 : 0) : "";
+    let m;
+    if (res.award > 0) m = inFree ? "再觸發！免費遊戲 +" + res.award : "3 個以上的珠：免費遊戲 " + res.award + " 次";
+    else if (inFree) m = "免費遊戲，獎金 ×" + GAME.fs_mult;
+    else m = res.win > 0 ? "中獎" : "沒中";
+    $("msg").textContent = m;
+    $("fs").textContent = current && current.left > 0 ? "免費遊戲剩 " + current.left + " 次" : "";
+    const ul = $("wins");
+    ul.innerHTML = "";
+    for (const w of res.wins) {
+      const li = document.createElement("li");
+      const amt = w.pay * res.mult * lineBet;
+      li.innerHTML = "<span>第 " + (w.line + 1) + " 線　<span class='sym'>" + GLYPH[w.symbol] + "</span> × " + w.count +
+        (res.mult > 1 ? "　（×" + res.mult + "）" : "") + "</span><span>" + fmt(amt) + "</span>";
+      li.addEventListener("mouseenter", () => drawLines(res, w.line));
+      li.addEventListener("mouseleave", () => drawLines(res));
+      ul.appendChild(li);
+    }
+    if (res.scatterWin > 0) {
+      const li = document.createElement("li");
+      li.innerHTML = "<span><span class='sym'>珠</span> × " + res.scatters + "（任意位置）</span><span>" +
+        fmt(res.scatterWin * 20 * lineBet) + "</span>";
+      ul.appendChild(li);
+    }
+  }
+
+  // ---------- 快轉（沒有動畫，分批執行讓畫面能更新） ----------
+  let fastStop = false;
+  function fast(total) {
+    if (busy) return;
+    if (current) { $("msg").textContent = "先把這一局的免費遊戲轉完"; return; }
+    busy = true;
+    fastStop = false;
+    setButtons();
+    let done = 0;
+    const t0 = performance.now();
+    function chunk() {
+      const until = performance.now() + 30;
+      while (done < total && performance.now() < until) {
+        for (let i = 0; i < 2000 && done < total; i++, done++) {
+          const r = E.playRound(rand);
+          st.paid += 20 * lineBet;
+          st.money += r.win * 20 * lineBet;
+          finishRound(r);
+        }
+      }
+      $("msg").textContent = "快轉中 " + fmt(done) + "／" + fmt(total);
+      render();
+      if (done < total && !fastStop) requestAnimationFrame(chunk);
+      else {
+        busy = false;
+        $("msg").textContent = "快轉完成：" + fmt(done) + " 局，" + ((performance.now() - t0) / 1000).toFixed(1) + " 秒";
+        $("lastwin").textContent = "";
+        $("wins").innerHTML = "";
+        lastRes = null;
+        drawLines(null);
+        setButtons();
+      }
+    }
+    requestAnimationFrame(chunk);
+  }
+
+  function auto(k) {
+    let left = k;
+    const step = () => {
+      if (left <= 0 && !(current && current.left > 0)) return;
+      if (!(current && current.left > 0)) left--;
+      spinOnce(() => setTimeout(step, reduce ? 60 : 220));
+    };
+    step();
+  }
+
+  // ---------- 帳本與圖 ----------
+  function halfWidth(n) { return 1.96 * T.sigma / Math.sqrt(n); }
+
+  function render() {
+    $("theory").textContent = pct(T.rtp);
+    $("hitT").textContent = pct(T.hit_rate);
+    $("trigT").textContent = "1／" + (1 / T.p_trigger).toFixed(1);
+    $("fsnT").textContent = T.expected_fs_spins.toFixed(2);
+    $("n").textContent = fmt(st.n);
+    $("money").textContent = fmt(st.paid) + "／" + fmt(st.money, 0);
+    $("bethint").textContent = "每把押 " + fmt(20 * lineBet) + "（20 線 × " + lineBet + "）";
+    if (st.n === 0) {
+      $("rtp").textContent = "—";
+      $("verdict").textContent = current ? "這一局還在免費遊戲中" : "還沒開始";
+      $("verdict").className = "verdict";
+      $("hit").textContent = $("trig").textContent = $("fsn").textContent = $("max").textContent = "—";
+    } else {
+      const rtp = st.win / st.n;
+      const hw = halfWidth(st.n);
+      $("rtp").textContent = pct(rtp);
+      const inside = Math.abs(rtp - T.rtp) <= hw;
+      $("verdict").className = "verdict " + (inside ? "in" : "out");
+      $("verdict").textContent = (inside ? "在理論的 95% 範圍內" : (rtp > T.rtp ? "比 95% 範圍高，運氣不錯" : "比 95% 範圍低，運氣不好")) +
+        "（" + fmt(st.n) + " 局的範圍是 " + pct(Math.max(0, T.rtp - hw), hw < 0.05 ? 2 : 1) + "～" + pct(T.rtp + hw, hw < 0.05 ? 2 : 1) + "）";
+      $("hit").textContent = pct(st.hits / st.n);
+      $("trig").textContent = st.trig ? "1／" + (st.n / st.trig).toFixed(1) : "還沒觸發";
+      $("fsn").textContent = st.trig ? (st.fsSpins / st.trig).toFixed(2) : "—";
+      $("max").textContent = st.max.toFixed(1) + " 倍押注";
+    }
+    drawChart();
+  }
+
+  const cv = $("chart");
+  function drawChart() {
+    const dpr = window.devicePixelRatio || 1;
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (!W) return;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const c = cv.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    const css = getComputedStyle(document.documentElement);
+    const col = (v) => css.getPropertyValue(v).trim();
+    const padL = 46, padR = 12, padT = 12, padB = 26;
+    const x0 = 50, x1 = Math.max(10000, st.n * 1.2);
+    const lx0 = Math.log10(x0), lx1 = Math.log10(x1);
+    const yHalf = halfWidth(x0) * 1.08;
+    const y0 = Math.max(0, T.rtp - yHalf), y1 = T.rtp + yHalf;
+    const X = (n) => padL + (Math.log10(n) - lx0) / (lx1 - lx0) * (W - padL - padR);
+    const Y = (v) => padT + (1 - (Math.min(Math.max(v, y0), y1) - y0) / (y1 - y0)) * (H - padT - padB);
+
+    // 95% 範圍（喇叭口）
+    c.beginPath();
+    const steps = 120;
+    for (let i = 0; i <= steps; i++) { const n = Math.pow(10, lx0 + (lx1 - lx0) * i / steps); c.lineTo(X(n), Y(T.rtp + halfWidth(n))); }
+    for (let i = steps; i >= 0; i--) { const n = Math.pow(10, lx0 + (lx1 - lx0) * i / steps); c.lineTo(X(n), Y(T.rtp - halfWidth(n))); }
+    c.closePath();
+    c.fillStyle = "rgba(23, 86, 74, .13)";
+    c.fill();
+
+    // 座標
+    c.font = "12px " + col("--sans");
+    c.fillStyle = col("--muted");
+    c.strokeStyle = col("--line");
+    c.lineWidth = 1;
+    for (let p = 2; p <= 7; p++) {
+      const n = Math.pow(10, p);
+      if (n < x0 || n > x1) continue;
+      c.beginPath(); c.moveTo(X(n), padT); c.lineTo(X(n), H - padB); c.stroke();
+      c.textAlign = "center";
+      c.fillText(n >= 1e6 ? (n / 1e6) + "百萬" : n >= 1e4 ? (n / 1e4) + "萬" : String(n), X(n), H - 8);
+    }
+    c.textAlign = "right";
+    [0.5, 1.0, 1.5].forEach((v) => { if (v > y0 && v < y1) c.fillText(Math.round(v * 100) + "%", padL - 6, Y(v) + 4); });
+
+    // 理論線
+    c.strokeStyle = col("--jade");
+    c.setLineDash([5, 4]);
+    c.beginPath(); c.moveTo(padL, Y(T.rtp)); c.lineTo(W - padR, Y(T.rtp)); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = col("--jade");
+    c.textAlign = "left";
+    c.fillText("理論 " + pct(T.rtp), padL + 6, Y(T.rtp) - 6);
+
+    // 你的 RTP
+    const pts = st.pts.filter((p) => p[0] >= x0);
+    if (st.n >= x0) pts.push([st.n, st.win / st.n]);
+    if (pts.length) {
+      c.strokeStyle = col("--cinnabar");
+      c.lineWidth = 2;
+      c.beginPath();
+      pts.forEach((p, i) => (i ? c.lineTo(X(p[0]), Y(p[1])) : c.moveTo(X(p[0]), Y(p[1]))));
+      c.stroke();
+      const last = pts[pts.length - 1];
+      c.fillStyle = col("--cinnabar");
+      c.beginPath(); c.arc(X(last[0]), Y(last[1]), 4, 0, Math.PI * 2); c.fill();
+    }
+    $("caption").textContent = st.n < x0
+      ? "玩到 " + x0 + " 局後開始畫線。灰綠色區域是理論 RTP 的 95% 範圍，局數越多越窄；橫軸是對數刻度。"
+      : "紅線是你的累積 RTP，灰綠色區域是理論的 95% 範圍（1.96σ/√n）。" + fmt(st.n) + " 局時範圍是 ±" + pct(halfWidth(st.n), 2) + "。";
+  }
+
+  // ---------- 賠率表 ----------
+  (function paytable() {
+    const t = $("paytable");
+    let h = "<tr><th>符號</th><th>3 連</th><th>4 連</th><th>5 連</th></tr>";
+    for (const s of ["W", "H1", "H2", "H3", "L1", "L2", "L3", "L4"]) {
+      const p = GAME.paytable[s];
+      h += "<tr><td><span class='g'>" + GLYPH[s] + "</span>" + NAME[s] + "</td><td>" + p[3] + "</td><td>" + p[4] + "</td><td>" + p[5] + "</td></tr>";
+    }
+    h += "<tr><td><span class='g'>珠</span>任意位置（總押注倍數）</td><td>" + GAME.scatter_pay[3] + "</td><td>" + GAME.scatter_pay[4] + "</td><td>" + GAME.scatter_pay[5] + "</td></tr>";
+    t.innerHTML = h + "<caption style='caption-side:bottom;text-align:left;color:var(--muted);font-size:13px;padding-top:6px'>線獎是「線注」的倍數；免費遊戲中全部 ×" + GAME.fs_mult + "。</caption>";
+  })();
+
+  // ---------- 按鈕 ----------
+  function setButtons() {
+    const inFree = !!(current && current.left > 0);
+    $("spin").disabled = busy;
+    $("spin").textContent = inFree ? "免費轉動" : "轉動";
+    $("auto").disabled = busy;
+    $("fast1").disabled = $("fast2").disabled = busy || inFree;
+    $("reset").disabled = busy;
+    document.querySelectorAll(".bet button").forEach((b) => (b.disabled = busy || inFree));
+  }
+  document.querySelectorAll(".bet button").forEach((b) => b.addEventListener("click", () => {
+    lineBet = +b.dataset.bet;
+    document.querySelectorAll(".bet button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    render();
+  }));
+  $("spin").addEventListener("click", () => spinOnce());
+  $("auto").addEventListener("click", () => auto(10));
+  $("fast1").addEventListener("click", () => fast(10000));
+  $("fast2").addEventListener("click", () => fast(1000000));
+  $("reset").addEventListener("click", resetStats);
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && e.target === document.body) { e.preventDefault(); spinOnce(); }
+  });
+  window.addEventListener("resize", () => { drawChart(); if (lastRes) drawLines(lastRes); });
+
+  resetStats();
+})();
+</script>
+</body>
+</html>

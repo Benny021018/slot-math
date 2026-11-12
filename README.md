@@ -9,6 +9,7 @@ two independent simulators (Python + C++), confidence-interval-based acceptance 
 
 | 想看什麼 | 去哪裡 |
 |---|---|
+| **直接玩玩看**，看 RTP 怎麼收斂到理論值 | [網頁試玩](https://benny021018.github.io/slot-math/play/)（原始檔 [`play/`](play/)） |
 | 規則、理論 RTP、模擬方法、次數、結果、差異分析 | 下面的「一頁摘要」 |
 | 完整驗收報告（11 項檢查、分布與極端值、突變測試） | [`reports/v1.0.0/report.md`](reports/v1.0.0/report.md) |
 | AI 工具與工作流案例 | [`docs/AI_WORKFLOW.md`](docs/AI_WORKFLOW.md) |
@@ -72,7 +73,8 @@ two independent simulators (Python + C++), confidence-interval-based acceptance 
 ```bash
 pip install -r requirements.txt          # numpy, scipy, pyyaml, pytest, matplotlib；C++ 部分需要 g++（C++17）
 python validate.py config/game_v1.yaml   # 約 75 秒，產出 reports/v<版本>/
-pytest -q                                # 16 項回歸測試（golden values、跨實作比對、規則單元測試）
+pytest -q                                # 17 項回歸測試（golden values、跨實作比對、規則單元測試、網頁引擎比對）
+python tools/build_play.py               # 由同一份設定產生網頁試玩 play/index.html
 ```
 
 修改參數的流程：改 YAML → 更新 `model_version` → `python validate.py` → 檢查報告 → 確認後更新 golden values → commit。
