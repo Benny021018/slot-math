@@ -70,7 +70,7 @@ two independent simulators (Python + C++), confidence-interval-based acceptance 
 ## 執行
 
 ```bash
-pip install -r requirements.txt          # numpy, scipy, pyyaml, pytest
+pip install -r requirements.txt          # numpy, scipy, pyyaml, pytest, matplotlib；C++ 部分需要 g++（C++17）
 python validate.py config/game_v1.yaml   # 約 75 秒，產出 reports/v<版本>/
 pytest -q                                # 16 項回歸測試（golden values、跨實作比對、規則單元測試）
 ```
