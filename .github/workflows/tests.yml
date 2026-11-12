@@ -1,0 +1,27 @@
+# 每次推到 main 或開 PR：跑回歸測試，並確認網頁試玩是由目前的設定產生的
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+      - name: 回歸測試（含 C++ 窮舉比對、JS 引擎逐盤面比對）
+        run: pytest -q
+      - name: 網頁試玩與設定一致
+        run: |
+          python tools/build_play.py
+          git diff --exit-code play/index.html
