@@ -3,7 +3,20 @@
 A synthetic 5×3 slot (fictional, built from scratch for this portfolio, no proprietary data) with an exact RTP model,
 two independent simulators (Python + C++), confidence-interval-based acceptance and a regression pipeline.
 
-> 自行設計的合成題目，不含任何公司的模型、數值表或原始碼。
+> 自行設計的合成題目，不含任何公司的模型、數值表或原始碼。作者：侯銘輝（[@Benny021018](https://github.com/Benny021018)）
+
+## 給審閱者：5 分鐘導覽
+
+| 想看什麼 | 去哪裡 |
+|---|---|
+| 規則、理論 RTP、模擬方法、次數、結果、差異分析 | 下面的「一頁摘要」 |
+| 完整驗收報告（11 項檢查、分布與極端值、突變測試） | [`reports/v1.0.0/report.md`](reports/v1.0.0/report.md) |
+| AI 工具與工作流案例 | [`docs/AI_WORKFLOW.md`](docs/AI_WORKFLOW.md) |
+| 理論 RTP 怎麼算 | [`slotmath/theory.py`](slotmath/theory.py) |
+| 獨立 C++ 實作（窮舉、蒙地卡羅、逐盤面評估） | [`cpp/slot.cpp`](cpp/slot.cpp) |
+| 驗收流程與統計判定 | [`validate.py`](validate.py)、[`slotmath/stats.py`](slotmath/stats.py) |
+| 規格與參數（唯一來源） | [`config/game_v1.yaml`](config/game_v1.yaml) |
+| 回歸測試 | [`tests/test_regression.py`](tests/test_regression.py) |
 
 ## 一頁摘要
 
@@ -19,6 +32,22 @@ two independent simulators (Python + C++), confidence-interval-based acceptance 
 | 差異分析 | 理論值落在所有合併 CI 內；命中率、觸發率、免費遊戲次數、σ 都和理論一致；4 種刻意植入的 bug 全部被抓出（見報告第 7 節） |
 
 完整報告：[`reports/v1.0.0/report.md`](reports/v1.0.0/report.md) · 所有數字：[`reports/v1.0.0/results.json`](reports/v1.0.0/results.json)
+
+## 結果一覽
+
+**模擬與理論一致**：20 個獨立種子各跑 2,645,799 局，19 個的 95% 信賴區間涵蓋精確理論值，符合「約 20 次有 1 次沒涵蓋」的預期。
+
+![20 個種子的 95% 信賴區間與理論 RTP](docs/figures/seed_ci.png)
+
+**驗收流程抓得到 bug**：刻意植入 4 種常見錯誤，|z| 全部超過門檻；正確的模擬器則遠低於門檻。
+
+![突變測試的 |z| 值](docs/figures/mutation_z.png)
+
+**波動與極端值**：約一半的局沒有獎金，超過 100 倍的大獎約 1/10,846。
+
+![單局獎金的尾部機率](docs/figures/win_tail.png)
+
+圖表由 `python tools/make_figures.py reports/v1.0.0/results.json docs/figures` 從驗收結果產生。
 
 ## 驗證設計
 
@@ -54,6 +83,7 @@ pytest -q                                # 16 項回歸測試（golden values、
 |---|---|
 | `config/game_v1.yaml` | 規則、賠率表、線型、輪帶（唯一的參數來源） |
 | `tools/make_strips.py` | 用固定種子產生輪帶（限制 S 在輪帶上至少間隔 3 格） |
+| `tools/make_figures.py` | 從 `results.json` 產生 README 圖表 |
 | `slotmath/model.py` | 載入與檢查設定、參考用線獎函式、匯出給 C++ 的規格檔 |
 | `slotmath/theory.py` | 解析理論 RTP 與拆分 |
 | `slotmath/sim.py` | 向量化蒙地卡羅模擬器 |
